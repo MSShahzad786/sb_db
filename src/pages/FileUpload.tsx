@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
-import { UploadCloud, Upload, Settings2, FileText, Table as TableIcon, AlertCircle } from 'lucide-react'
+import { UploadCloud, Upload, Settings2, FileText, Table as TableIcon, AlertCircle, Copy, Check } from 'lucide-react'
 import Papa from 'papaparse'
 import { useTableSchema } from '@/hooks/useTableSchema'
 import { ForeignKeySelector } from '@/components/ForeignKeySelector'
@@ -20,8 +20,34 @@ import {
 
 type FileType = 'json' | 'csv' | 'md'
 
+const EXAMPLE_1_MD = `**Q1. What is the default port for PostgreSQL?**
+A) 3306
+B) 5432
+C) 27017
+D) 6379
+**Answer: 1**
+The default port for PostgreSQL is 5432. Option A is MySQL, C is MongoDB, and D is Redis.`
+
+const EXAMPLE_2_MD = `**Q1. Which keyword is used to remove duplicates from a SELECT query?**
+A) DISTINCT
+B) UNIQUE
+C) GROUP BY
+D) ALL
+**Answer: 0**
+The DISTINCT keyword is used to return only distinct (different) values.
+---
+**Q2. Which SQL clause is used to filter records?**
+A) WHERE
+B) HAVING
+C) ORDER BY
+D) GROUP BY
+**Answer: 0**
+The WHERE clause is used to filter records.`
+
 export default function FileUpload() {
   const [fileType, setFileType] = useState<FileType>('json')
+  const [hasError, setHasError] = useState(false)
+  const [copiedExampleIndex, setCopiedExampleIndex] = useState<number | null>(null)
   const [tables, setTables] = useState<string[]>([])
   const [selectedTable, setSelectedTable] = useState('')
   const [preview, setPreview] = useState<any[]>([])
@@ -38,6 +64,10 @@ export default function FileUpload() {
     }
     fetchTables()
   }, [])
+
+  useEffect(() => {
+    setHasError(false)
+  }, [fileType, pastedContent])
 
   const parseMarkdown = (text: string) => {
     const questions: any[] = []
@@ -75,6 +105,15 @@ export default function FileUpload() {
     return questions
   }
 
+  const handleCopyExample = (text: string, index: number) => {
+    navigator.clipboard.writeText(text)
+    setCopiedExampleIndex(index)
+    toast.success(`Example ${index} copied to clipboard!`)
+    setTimeout(() => {
+      setCopiedExampleIndex(null)
+    }, 2000)
+  }
+
   const processContent = (content: string, filename?: string) => {
     let parsedData: any[] = []
 
@@ -91,6 +130,7 @@ export default function FileUpload() {
 
       if (parsedData.length > 0) {
         setPreview(parsedData)
+        setHasError(false)
         if (filename) {
           toast.success(`Successfully parsed ${parsedData.length} records from ${filename}`)
         } else {
@@ -99,10 +139,12 @@ export default function FileUpload() {
       } else {
         toast.error('No valid records found. Check format.')
         setPreview([])
+        setHasError(true)
       }
     } catch (err) {
       toast.error('Critical Error: Could not parse data.')
       setPreview([])
+      setHasError(true)
     }
   }
 
@@ -272,6 +314,95 @@ export default function FileUpload() {
                       + {preview.length - 10} more records in buffer
                     </div>
                   )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : fileType === 'md' ? (
+            <Card className="border-primary/10 glassmorphism shadow-xl animate-in fade-in duration-300 overflow-hidden">
+              <CardHeader className={`border-b border-primary/5 pb-4 transition-colors ${hasError ? 'bg-destructive/5' : 'bg-primary/5'}`}>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <AlertCircle className={`h-5 w-5 ${hasError ? 'text-destructive' : 'text-primary'}`} />
+                  {hasError ? 'Invalid Markdown Format Detected' : 'Markdown Formatting Guide'}
+                </CardTitle>
+                <CardDescription>
+                  {hasError 
+                    ? 'Your pasted content could not be parsed. Make sure your formatting matches one of the copyable examples below.'
+                    : 'To import questions from Markdown, format your text like the copyable examples below.'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                {hasError && (
+                  <div className="p-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-xl flex items-start gap-3 text-sm animate-in shake duration-300">
+                    <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+                    <div>
+                      <h4 className="font-bold">Parsing Failed</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        The parser extracts questions with Options (A-D) and an Answer index. Ensure correct capitalization and structure.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Example 1: Single Question</h4>
+                      <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-mono">1 Record</span>
+                    </div>
+                    <div className="relative group">
+                      <pre className="p-4 bg-muted/50 rounded-lg text-[11px] font-mono whitespace-pre-wrap break-all border border-primary/5 select-all overflow-y-auto max-h-[220px]">
+                        {EXAMPLE_1_MD}
+                      </pre>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleCopyExample(EXAMPLE_1_MD, 1)}
+                        className="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background shadow-sm border border-primary/10 h-8 text-[11px] font-medium"
+                      >
+                        {copiedExampleIndex === 1 ? (
+                          <>
+                            <Check className="h-3 w-3 mr-1 text-green-600" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3 mr-1" />
+                            Copy Example
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Example 2: Multiple Questions</h4>
+                      <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-mono">2 Records</span>
+                    </div>
+                    <div className="relative group">
+                      <pre className="p-4 bg-muted/50 rounded-lg text-[11px] font-mono whitespace-pre-wrap break-all border border-primary/5 select-all overflow-y-auto max-h-[220px]">
+                        {EXAMPLE_2_MD}
+                      </pre>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleCopyExample(EXAMPLE_2_MD, 2)}
+                        className="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background shadow-sm border border-primary/10 h-8 text-[11px] font-medium"
+                      >
+                        {copiedExampleIndex === 2 ? (
+                          <>
+                            <Check className="h-3 w-3 mr-1 text-green-600" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3 mr-1" />
+                            Copy Example
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
